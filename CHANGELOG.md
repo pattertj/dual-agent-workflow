@@ -11,6 +11,26 @@ in a way that would change how already-adopted repos behave if they re-copied th
 
 <!-- Add new entries here as you revise the policy. -->
 
+## [0.2.0] - 2026-10-02
+
+### Changed
+
+- **Breaking:** model routing bumped to the current tiers. Claude: `claude-opus-4-8[1m]` →
+  `claude-opus-5-5[1m]`. Codex: the high-stakes / frontend-review tier `gpt-5.6-sol` → `gpt-6-astra`;
+  the routine / boilerplate tier `gpt-5.6-terra` → `gpt-6.1-sol`. The Codex dispatch command and
+  `/codex:adversarial-review` examples now pass these full IDs (the `codex` plugin doesn't resolve
+  `astra`/`sol` aliases).
+- Claude Code (v2.1.277+) reads `AGENTS.md` natively, including nested `AGENTS.md` files in
+  subdirectories. `CLAUDE.md` is now **optional**: `CLAUDE.template.md` is only for repos that already
+  have a `CLAUDE.md` (which Claude Code reads *instead of* `AGENTS.md` by default) or that run older
+  Claude Code. README, GUIDE and SETUP_PROMPT updated to match.
+- Effort mechanics clarified: Codex `task` takes `--effort` per call (up to `xhigh`) while Codex review
+  reads `model_reasoning_effort` from `~/.codex/config.toml`. Claude effort is a session setting, not a
+  per-subagent one.
+- Claude Engineer subagents use `isolation: worktree` for the per-agent worktree rule.
+- Setup docs include the Codex plugin install steps (`openai/codex-plugin-cc`, `codex@openai-codex`,
+  `/codex:setup`).
+
 ## [0.1.0] - 2026-07-29
 
 ### Added
@@ -31,5 +51,6 @@ in a way that would change how already-adopted repos behave if they re-copied th
 - `.github/ISSUE_TEMPLATE/policy-change.md` — issue template for proposing policy changes.
 - `LICENSE` — MIT.
 
-[Unreleased]: https://github.com/pattertj/dual-agent-workflow/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/pattertj/dual-agent-workflow/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/pattertj/dual-agent-workflow/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/pattertj/dual-agent-workflow/releases/tag/v0.1.0

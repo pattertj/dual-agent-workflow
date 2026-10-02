@@ -38,7 +38,7 @@ review) and *up* for risky ones (a full staged pipeline + human sign-off).
 | Role | Who | What they do |
 |---|---|---|
 | **Orchestrator** | Claude Code | The agent *you* talk to. It plans, dispatches the others, and adjudicates review findings. |
-| **Architect** | Claude (Opus, read-only) | For risky work: traces the code, confirms the root cause, writes a design doc. Doesn't write code. |
+| **Architect** | Claude (Opus 5.5, read-only) | For risky work: traces the code, confirms the root cause, writes a design doc. Doesn't write code. |
 | **Engineer** | Claude *or* Codex | Writes the code, test-first, in an isolated worktree. Frontend → Claude; backend/high-stakes → Codex. |
 | **Reviewer** | The *opposite* vendor of the Engineer | Reads the full diff, reports findings. **Never edits.** |
 | **Human (you)** | You | Approve the final commit on high-stakes changes; otherwise just steer. |
@@ -50,32 +50,37 @@ memory of prior rounds, so no anchoring), and **only reports** — the Engineer 
 
 Work is routed by **the riskiest thing the diff touches**:
 
-- **Frontend / UI / visual** → **Claude (Opus)**. Reviewed by **Codex**.
+- **Frontend / UI / visual** → **Claude (Opus 5.5)**. Reviewed by **Codex**.
 - **High-stakes backend** (money-path, auth, migrations, anything expensive to get wrong) →
-  **Codex `sol`**. Reviewed by **Claude**.
-- **Routine backend / glue** → **Codex `terra`**. Reviewed by **Claude**.
-- **Pure boilerplate** (renames, config, codegen, zero logic) → **Codex `terra`** at low effort. Light
+  **Codex GPT-6 Astra** (`gpt-6-astra`). Reviewed by **Claude**.
+- **Routine backend / glue** → **Codex GPT-6.1 Sol** (`gpt-6.1-sol`). Reviewed by **Claude**.
+- **Pure boilerplate** (renames, config, codegen, zero logic) → **Codex Sol** at low effort. Light
   Claude pass, or skip review entirely.
 - **Docs / comments** → whoever; no review needed.
 
 A diff that spans UI *and* high-stakes logic gets **split** into two pieces so each half is authored by
 the right vendor. If it can't be split, the high-stakes half wins and Codex takes it.
 
-## 5. The two files, and how they fit together
+## 5. The policy file (and the optional pointer)
 
-- **`AGENTS.md`** — the single source of truth. Both tools read it. Codex reads it natively; Claude
-  reads it via an `@AGENTS.md` import.
-- **`CLAUDE.md`** — a *thin pointer* that just imports `AGENTS.md`. It holds **no policy of its own**,
-  so the two files can never drift apart.
+- **`AGENTS.md`** — the single source of truth. Both tools read it natively: Codex always has, and
+  Claude Code does from v2.1.277. Both also pick up nested `AGENTS.md` files in subdirectories, which
+  is how a subtree gets stricter rules.
+- **`CLAUDE.md`** — *optional*. Claude Code reads `CLAUDE.md` **instead of** `AGENTS.md` when both
+  exist, so if your repo has (or needs) a `CLAUDE.md`, make it a thin pointer that imports `AGENTS.md`
+  via `@AGENTS.md` and holds **no policy of its own** — that way the two can never drift. You also want
+  the pointer if anyone runs Claude Code older than v2.1.277.
 
 Some rules are tool-specific and tagged **Claude Code:** or **Codex:** in `AGENTS.md` — each agent
 follows only its own tag and ignores the other's.
 
 ## 6. Setting it up (first time)
 
-1. **Prereqs.** Install Claude Code and the `codex` plugin; log into both. Confirm Codex responds.
-2. **Drop in the templates.** Copy `AGENTS.template.md` → `AGENTS.md` and `CLAUDE.template.md` →
-   `CLAUDE.md` at your repo root.
+1. **Prereqs.** Install Claude Code (v2.1.277+) and, inside it, the Codex plugin:
+   `/plugin marketplace add openai/codex-plugin-cc`, `/plugin install codex@openai-codex`, then
+   `/codex:setup` to log in. Confirm Codex responds.
+2. **Drop in the template.** Copy `AGENTS.template.md` → `AGENTS.md` at your repo root. Only if the repo
+   already has a `CLAUDE.md`, add `@AGENTS.md` to it (or use `CLAUDE.template.md`).
 3. **Fill the placeholders** (or better — hand the templates plus `SETUP_PROMPT.md` to a Claude session
    running inside the repo and let it do steps 2–4 for you). You supply:
    - `{{HIGH_STAKES_DOMAIN}}` — your money-path / high-blast-radius area.
@@ -97,7 +102,7 @@ follows only its own tag and ignores the other's.
 
 **High-stakes change** (touches `{{HIGH_STAKES_DOMAIN}}`):
 1. **Architect** (Claude, read-only) confirms the root cause and writes a design doc.
-2. **Engineer** (Codex `sol`) implements it via strict TDD — red test first, watch it fail, then make
+2. **Engineer** (Codex Astra) implements it via strict TDD — red test first, watch it fail, then make
    it pass — runs the full suite + integration + lint, opens a PR.
 3. **Reviewer** (fresh Claude) reviews the *entire* diff and reports findings. Codex fixes them. Repeat
    with a **new** reviewer each round until every finding is **fixed or filed**.
@@ -135,7 +140,8 @@ quick review and ships.
 
 - `README.md` — the repo landing page: what this is and how to get started fast.
 - `AGENTS.template.md` → copy to `AGENTS.md` in your repo — the canonical policy. Edit this one.
-- `CLAUDE.template.md` → copy to `CLAUDE.md` — the pointer. Don't put policy here.
+- `CLAUDE.template.md` → *optional* `CLAUDE.md` pointer, only if your repo needs a `CLAUDE.md`. Don't put
+  policy here.
 - `SETUP_PROMPT.md` — hand this to an LLM inside the target repo to do the setup for you.
 - `GUIDE.md` — this guide.
 - `LICENSE` — MIT.

@@ -1,3 +1,11 @@
+<!--
+  OPTIONAL. Claude Code v2.1.277+ reads AGENTS.md natively, so most repos need no CLAUDE.md at all.
+  Copy this to CLAUDE.md only if:
+    - someone runs Claude Code older than v2.1.277, or
+    - the repo already has (or needs) a CLAUDE.md for other reasons.
+  When a CLAUDE.md exists, Claude Code by default reads it *instead of* AGENTS.md, so the
+  `@AGENTS.md` import below is what keeps the shared policy loaded. Delete this comment once copied.
+-->
 # CLAUDE.md
 
 Claude Code's policy for this repository is the shared, canonical **[`AGENTS.md`](AGENTS.md)**, imported
