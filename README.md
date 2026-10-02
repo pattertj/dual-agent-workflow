@@ -10,15 +10,16 @@ differently, so it catches what a self-review never would. Everything else in th
 work-type routing, the staged pipeline, the merge gates — exists to serve that rule and keep the
 process honest.
 
-This repo is a **template**, not a library. You copy two files into your own repo, fill in a handful of
-project-specific placeholders, and both agents pick up the policy automatically.
+This repo is a **template**, not a library. You copy one file (`AGENTS.md`) into your own repo, fill in
+a handful of project-specific placeholders, and both agents pick up the policy automatically — Codex and
+Claude Code (v2.1.277+) both read `AGENTS.md` natively.
 
 ## What's in here
 
 | File | What it is |
 |---|---|
-| **`AGENTS.template.md`** | The canonical shared policy. Copy to `AGENTS.md` in your repo. Both agents read it (Codex natively, Claude via `@AGENTS.md`). This is the file you edit. |
-| **`CLAUDE.template.md`** | A thin pointer that imports `AGENTS.md`. Copy to `CLAUDE.md`. Holds no policy of its own, so the two files never drift. |
+| **`AGENTS.template.md`** | The canonical shared policy. Copy to `AGENTS.md` in your repo. Both agents read it natively. This is the file you edit. |
+| **`CLAUDE.template.md`** | *Optional.* A thin pointer that imports `AGENTS.md` (`@AGENTS.md`). Only needed if your repo already has a `CLAUDE.md` (Claude Code then reads it *instead of* `AGENTS.md`) or someone runs Claude Code older than v2.1.277. |
 | **`SETUP_PROMPT.md`** | Hand this to a Claude/Codex session running *inside your target repo* and it will do the setup for you — inspect the repo, fill placeholders, wire the files, and report back. |
 | **`GUIDE.md`** | A from-scratch explainer for people new to the pattern: why it's shaped this way, the roles, the routing table, and two day-in-the-life walkthroughs. Start here if it's your first time. |
 
@@ -29,13 +30,17 @@ project-specific placeholders, and both agents pick up the policy automatically.
 rest and shows you a diff to approve.
 
 **Option B — by hand.**
-1. Copy `AGENTS.template.md` → `AGENTS.md` and `CLAUDE.template.md` → `CLAUDE.md` at your repo root.
+1. Copy `AGENTS.template.md` → `AGENTS.md` at your repo root. If the repo already has a `CLAUDE.md`,
+   add an `@AGENTS.md` line to it (or copy `CLAUDE.template.md` → `CLAUDE.md`) — otherwise Claude Code
+   reads `CLAUDE.md` and skips `AGENTS.md`.
 2. Fill the placeholders:
    - `{{HIGH_STAKES_DOMAIN}}` — your money-path / high-blast-radius area (auth, payments, migrations…).
    - `{{TASK_TRACKER}}` — where issues live.
    - `{{TEST_CMD}}` / `{{INTEGRATION_CMD}}` / `{{LINT_CMD}}` — the commands an engineer must pass.
-3. Confirm the Codex dispatch command in the "Model routing" section resolves on your machine (the
-   `codex` plugin is installed and logged in).
+3. Install the Codex plugin in Claude Code and log in:
+   `/plugin marketplace add openai/codex-plugin-cc` → `/plugin install codex@openai-codex` →
+   `/reload-plugins` → `/codex:setup`. Then confirm the dispatch command in the "Model routing" section
+   resolves on your machine.
 4. Delete the `> Placeholder key` block from `AGENTS.md`.
 
 New to the whole idea? Read **[`GUIDE.md`](GUIDE.md)** first.
