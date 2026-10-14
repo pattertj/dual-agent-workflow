@@ -78,8 +78,10 @@ follows only its own tag and ignores the other's.
 
 1. **Prereqs.** Install Claude Code (v2.1.277+) and, inside it, the Codex plugin:
    `/plugin marketplace add openai/codex-plugin-cc`, `/plugin install codex@openai-codex`, then
-   `/codex:setup` to log in. Confirm Codex responds.
-2. **Drop in the template.** Copy `AGENTS.template.md` → `AGENTS.md` at your repo root. Only if the repo
+   `/codex:setup` to log in. Confirm Codex responds. Install the `tdd` skill both engineers use:
+   `npx skills add https://github.com/mattpocock/skills --skill tdd`.
+2. **Drop in the template.** Copy `AGENTS.template.md` → `AGENTS.md` at your repo root, and copy
+   `templates/` in as-is (`cp -R templates/. <your-repo>/`) for the role files. Only if the repo
    already has a `CLAUDE.md`, add `@AGENTS.md` to it (or use `CLAUDE.template.md`).
 3. **Fill the placeholders** (or better — hand the templates plus `SETUP_PROMPT.md` to a Claude session
    running inside the repo and let it do steps 2–4 for you). You supply:
@@ -102,9 +104,11 @@ follows only its own tag and ignores the other's.
 
 **High-stakes change** (touches `{{HIGH_STAKES_DOMAIN}}`):
 1. **Architect** (Claude, read-only) confirms the root cause and writes a design doc.
-2. **Engineer** (Codex Astra) implements it via strict TDD — red test first, watch it fail, then make
-   it pass — runs the full suite + integration + lint, opens a PR.
-3. **Reviewer** (fresh Claude) reviews the *entire* diff and reports findings. Codex fixes them. Repeat
+2. **Engineer** (Codex Astra) implements it with the `tdd` skill: one slice at a time at the seams the
+   design names, red test first, watch it fail, then make it pass. It runs the full suite +
+   integration + lint, opens a PR, and reports its evidence.
+3. **Reviewers** (fresh Claude, one per axis: correctness, spec, standards) review the *entire* diff
+   and report findings. Codex fixes them. Repeat
    with a **new** reviewer each round until every finding is **fixed or filed**.
 4. **You approve the final commit SHA.** (This human gate applies *only* to high-stakes work.)
 5. Merge, close the issue, clean up the worktree.
@@ -115,9 +119,11 @@ follows only its own tag and ignores the other's.
   issue* — a green verdict with unaddressed findings is not done.
 - **Reviewers never edit.** If a reviewer starts "helpfully" fixing things, it's now an author and can
   no longer review that code. Findings only; the Engineer fixes.
-- **Override the Claude reviewer's confidence floor.** Stock reviewer agents suppress anything below
-  ~80% confidence and quietly drop real bugs. Tell the reviewer to report *everything* and sort
-  severity afterward. (Codex's adversarial reviewer already does this.)
+- **Reviewers report everything, one axis each.** Stock reviewer agents suppress anything below ~80%
+  confidence and quietly drop real bugs, so the repo ships its own reviewer that reports *everything*
+  and sorts severity afterwards. Each round runs separate fresh reviewers for **correctness**, **spec**
+  (does it do what the issue and design asked?) and, on high-stakes work, **standards**, so that "it
+  follows every convention" can't hide "it does the wrong thing".
 - **Fresh reviewer every round.** Re-using the same reviewer anchors it to its earlier take. New one
   each time.
 - **Everyone works in their own worktree.** Two agents in one checkout will clobber each other and leak
@@ -140,6 +146,8 @@ quick review and ships.
 
 - `README.md` — the repo landing page: what this is and how to get started fast.
 - `AGENTS.template.md` → copy to `AGENTS.md` in your repo — the canonical policy. Edit this one.
+- `templates/` → copied into your repo as-is: the role contracts (`agent-roles/`) both vendors follow,
+  and the Claude Code subagents (`.claude/agents/`) for Architect, Engineer and Reviewer.
 - `CLAUDE.template.md` → *optional* `CLAUDE.md` pointer, only if your repo needs a `CLAUDE.md`. Don't put
   policy here.
 - `SETUP_PROMPT.md` — hand this to an LLM inside the target repo to do the setup for you.

@@ -11,6 +11,43 @@ in a way that would change how already-adopted repos behave if they re-copied th
 
 <!-- Add new entries here as you revise the policy. -->
 
+### Added
+
+- **Role definitions** in `templates/`, copied into the target repo as-is:
+  - `agent-roles/engineer.md` and `agent-roles/reviewer.md`: role contracts both vendors follow,
+    covering inputs, rules, stop conditions and a fixed report format.
+  - `.claude/agents/architect.md`, `engineer.md` and `reviewer.md`: Claude Code subagents. The
+    architect and reviewer are read-only, with no edit tools. The engineer uses
+    `isolation: worktree` and preloads the `tdd` skill. All three use the `opus` alias, so a Claude
+    model bump needs no edits here.
+- **TDD via the `tdd` skill** (mattpocock/skills) for both vendors' engineers: pre-agreed seams
+  (supplied by the Architect's design doc), vertical slices, red for the right reason, no tautological
+  or implementation-coupled tests, and refactoring left to review. The existing
+  mutate-the-fix discrimination proof is kept.
+- **Review axes**, adapted from mattpocock/skills `code-review`: correctness, spec and standards, each
+  run by a separate fresh reviewer in parallel, with no cross-axis reranking. The standards axis
+  carries a Fowler code-smell baseline as MINOR judgement calls that the repo's documented standards
+  override. Unlike the source skill, reviewers have no word cap.
+- **Merge checklist** inline in `AGENTS.md` (review record, no lost findings, no SHA drift, CI, human
+  SHA approval on the high-stakes path, squash-merge, clean-up). It replaces the dependency on an
+  unshipped `/merge` skill.
+- **Process hygiene** for Codex dispatch: background runs, a process group per run via a portable
+  `perl` wrapper, killing the whole group on abort, collecting or cancelling plugin jobs, a check for
+  leftover Codex processes once per session, and engineers tearing down what their tests start.
+- A recorded decision on why Codex is dispatched through the plugin companion rather than an MCP
+  server, and what would reopen the question.
+
+### Changed
+
+- **Breaking:** the confidence-floor override is now built into the repo's own `reviewer` subagent
+  instead of being restated in each dispatch prompt. Re-copy `templates/` along with `AGENTS.md`.
+- Engineer reports are evidence-backed (red output, discrimination proof, gate results, deviations,
+  processes left running), so the "probationary" check on Codex runs compares the report against the
+  diff.
+- Effort mechanics corrected: Claude Code subagents *do* accept an `effort` frontmatter field.
+  `architect` and `engineer` pin `xhigh`. `reviewer` inherits the session's effort, so the
+  orchestrator still sets `high` or `xhigh` per path.
+
 ## [0.2.0] - 2026-10-02
 
 ### Changed

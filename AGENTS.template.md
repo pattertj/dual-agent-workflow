@@ -45,9 +45,14 @@ passes.** Start from a red test that captures the bug/requirement, never from th
 discrimination by mutating the fix and watching the test go red. This is binding on **every**
 implementer — Claude and Codex alike.
 
-**Claude Code:** drive development through your workflow skills — test-driven-development (red first),
-worktree isolation, subagent parallelization. Codex has its own equivalents; the TDD requirement above
-is what binds both.
+**Both vendors: use the `tdd` skill** (mattpocock/skills; install with
+`npx skills add https://github.com/mattpocock/skills --skill tdd`, which installs it for Claude Code and
+Codex alike). Test only at agreed **seams** (public interfaces, never internals), in **vertical
+slices** (one test → minimal code → repeat, never all tests first), with expected values from an
+independent source (no tautological tests), and mock only at system boundaries. Refactoring is not
+part of the red → green loop. It comes back from review as findings. On dispatched work the seam
+list comes from the Architect's design doc or the dispatch prompt. The full Engineer contract is
+`agent-roles/engineer.md`.
 
 ## Git / Worktrees
 
@@ -104,57 +109,61 @@ opposite-vendor reviewer of the implementation still applies. This routing gover
 implementation work; the staged pipeline below is its high-stakes instance, and lighter changes use the
 same implementer/reviewer routing without the full Architect design doc.
 
-#### Reviewer confidence filters — override them
+#### Review axes
 
-This applies to **Claude** reviewers — the reviewer for all Codex-implemented work (backend, routine,
-boilerplate), plus the everyday `/code-review` path. The stock `feature-dev` and `pr-review-toolkit`
-reviewer agents ship with a hard reporting floor:
+Each review round is split into separate **axes**, each run by its own fresh reviewer in parallel, so
+that one axis can't mask another. Code that follows every standard can still implement the wrong
+thing, and vice versa:
 
-- `feature-dev/agents/code-reviewer.md` — *"Only report issues with confidence ≥ 80."*
-- `pr-review-toolkit/agents/code-reviewer.md` — *"Only report issues with confidence ≥ 80"*
+- **correctness**: bugs, regressions, security, resource handling, test quality.
+- **spec**: missing or partial requirements, scope creep, wrong implementations, unjustified
+  deviations from the design doc. Quote the spec line for each finding.
+- **standards**: documented repo standards plus a fixed code-smell baseline, which are always
+  MINOR judgement calls.
 
-Modern models take that literally and **under-report**: they find real bugs at high precision and
-recall even at low effort, then suppress them for not clearing an arbitrary bar. On the high-stakes
-path a suppressed finding is a shipped defect.
+| Change | Axes |
+|---|---|
+| Staged pipeline (high-stakes) | correctness + spec + standards |
+| Everything else with logic | correctness + spec (spec is skipped when there is no issue or spec) |
+| Boilerplate (light pass) | correctness |
 
-**When dispatching either reviewer, override the filter in the prompt** — instruct it to report
-everything it finds and to classify severity (BLOCKER / MAJOR / MINOR) in a **separate pass after
-discovery**, not to gate discovery on a confidence score. Filtering is the adjudicating agent's job,
-not the finder's.
-
-These agent definitions live in installed plugins under `~/.claude/plugins/`, **outside this
-repository** — they are third-party files, so do not edit them (the change is lost on plugin update and
-is not version-controlled). Override at dispatch time instead.
-
-The Codex `/codex:adversarial-review` reviewer carries **no** confidence floor — its prompt is already
-adversarial and reports every finding with its own 0–1 confidence — so no override is needed for it.
+The full reviewer contract, shared by both vendors, is `agent-roles/reviewer.md`. Reviewers **report
+everything they find and classify severity (BLOCKER / MAJOR / MINOR) in a separate pass after
+discovery**. They have no confidence floor and no word cap. Models take a reporting floor literally
+and under-report: they find real bugs, then suppress them for missing an arbitrary bar. On the
+high-stakes path a suppressed finding is a shipped defect. Filtering is the adjudicating agent's job,
+not the finder's. The repo's own `reviewer` subagent (`.claude/agents/reviewer.md`) has this built in.
+If you ever review with a stock plugin agent instead (`feature-dev` or `pr-review-toolkit`
+`code-reviewer`, which only report at confidence ≥ 80), override that floor in the dispatch prompt.
+Don't edit those plugin files: they live outside this repo and are overwritten on update.
 
 ### Multi-agent delivery pipeline (high-stakes work)
 
 For high-risk issues ({{HIGH_STAKES_DOMAIN}}), run each issue through a staged agent pipeline; stages
 hand off via files/PRs, never shared state:
 
-1. **Architect** (claude-opus-5-5[1m] @ `xhigh`, read-only) — traces code end-to-end, confirms/refutes
-   the issue's hypothesized root cause, picks an approach vs alternatives, writes a self-sufficient
-   design doc (files/functions, failure-mode analysis, TDD test plan, out-of-scope).
+1. **Architect** (the `architect` subagent: Opus @ `xhigh`, read-only). It traces the code
+   end-to-end, confirms or refutes the issue's hypothesized root cause, picks an approach over the
+   alternatives, and returns a self-sufficient design doc: files and functions, **seams under test**,
+   a TDD test plan, failure modes and out-of-scope. The orchestrator stores the doc with the issue in
+   {{TASK_TRACKER}} and hands it to the Engineer verbatim.
 2. **Engineer** (**Codex `gpt-6-astra`** for high-stakes backend — this pipeline's default; a high-risk
    frontend change uses the same cross-vendor routing, Opus-built and Astra-reviewed, but without this
-   pipeline's human-SHA gate; own worktree) — implements the design via strict TDD (red first, watch it
-   fail; prove discrimination by mutating the fix and watching tests go red), runs `{{TEST_CMD}}` +
-   `{{INTEGRATION_CMD}}` + `{{LINT_CMD}}`, opens a PR with `Closes #N`. Deviations from the design must
-   be justified in the PR body.
-3. **Principal reviewer** — the **opposite vendor** of the Engineer, a fresh review every round (no
-   anchoring), over the FULL PR diff against base. For the usual high-stakes case (Astra-implemented)
-   that is **claude-opus-5-5[1m] @ `xhigh`** via a fresh Claude reviewer subagent (with the
-   confidence-floor override); for Opus-implemented work it is **Codex `gpt-6-astra`** via
-   `/codex:adversarial-review`. The reviewer **reports findings only** — it never edits code; the
+   pipeline's human-SHA gate; own worktree) — follows `agent-roles/engineer.md`: implements the design
+   with the `tdd` skill at the design's seams (red first, watch it fail; prove discrimination by
+   mutating the fix and watching tests go red), runs `{{TEST_CMD}}` + `{{INTEGRATION_CMD}}` +
+   `{{LINT_CMD}}`, opens a PR with `Closes #N`, and returns the evidence-backed Engineer report.
+   Deviations from the design must be justified in the PR body.
+3. **Principal reviewer** — the **opposite vendor** of the Engineer, fresh every round (no
+   anchoring), over the FULL PR diff against base, on all three **review axes** in parallel. For the
+   usual high-stakes case (Astra-implemented) that is three `reviewer` subagents (Opus, session at
+   `xhigh`). For Opus-implemented work it is **Codex `gpt-6-astra`** (mechanics below). The reviewer
+   **reports findings only** — it never edits code; the
    Engineer applies fixes and the loop repeats until every finding is **fixed or filed** as a scoped
    issue — not merely until the verdict reads `approve`. Classify findings BLOCKER/MAJOR/MINOR when
    recording. Expect this loop to earn its keep: successive fresh reviews routinely find distinct real
    blockers.
-4. **Merge** (`/merge` skill) — post the review record as a `### Code review` PR comment citing the
-   approved SHA, defer MINOR and out-of-scope findings to issues (never lose them), CI green, SHA-drift
-   check, squash-merge (auto-closes the issue), remove the worktree, fast-forward main.
+4. **Merge**: follow the **Merge checklist** below.
 
 On the high-stakes path the Engineer is **Codex `gpt-6-astra`** and the reviewer is a fresh
 **claude-opus-5-5[1m] @ `xhigh`** (cross-vendor by construction); these changes additionally need
@@ -168,48 +177,110 @@ cross-vendor review at the `high` floor (docs, comments, and pure boilerplate ne
 
 These are **Claude Code (orchestrator) dispatch mechanics** — how the agent driving the pipeline
 invokes each implementer/reviewer. A dispatched Codex or Claude engineer/reviewer does not run these;
-it just implements or reviews per its prompt.
+it just follows its role contract.
+
+**Role definitions.** Each role's contract is a file in this repo, so dispatch prompts carry only the
+inputs and never restate the rules:
+
+| Role | Contract | Claude Code subagent |
+|---|---|---|
+| Architect | `.claude/agents/architect.md` (Claude only) | `architect`: read-only, Opus @ `xhigh` |
+| Engineer | `agent-roles/engineer.md` (both vendors) | `engineer`: `isolation: worktree`, `tdd` skill preloaded, Opus @ `xhigh` |
+| Reviewer | `agent-roles/reviewer.md` (both vendors) | `reviewer`: report-only, one axis per dispatch |
+
+The subagents use the `opus` model alias, so a Claude model bump needs no edits there. Their
+"read-only" and "report-only" limits remove the edit tools, but `Bash` can still write. The rest of
+the guarantee is the instruction in the contract, so check reviewers' worktrees are clean.
 
 **Codex models (implementation)** run through the installed `codex` plugin's app-server runtime (no
-`codex exec` stdin gotchas). Implement in an isolated worktree via (resolve the current plugin version —
-do not hardcode it; the cache dir changes on plugin update):
+`codex exec` stdin gotchas). Write a prompt file that carries only the inputs:
+
+```
+Role: Engineer. Read agent-roles/engineer.md and follow it exactly; AGENTS.md also applies.
+Issue: #<N> <title>
+Branch / worktree: <branch> in <worktree path>
+Seams under test: <from the design doc, or listed here for lighter changes>
+Design doc:
+<the Architect's design doc verbatim, or "none (non-pipeline change)">
+```
+
+Then dispatch it in the Engineer's isolated worktree (resolve the current plugin version — do not
+hardcode it; the cache dir changes on plugin update):
 
 ```
 CODEX_ROOT=$(ls -d ~/.claude/plugins/cache/openai-codex/codex/*/ | sort -V | tail -1)
-node "$CODEX_ROOT/scripts/codex-companion.mjs" task \
+perl -e 'print STDERR "codex pgid=$$\n"; setpgrp(0,0); exec @ARGV' -- \
+  node "$CODEX_ROOT/scripts/codex-companion.mjs" task \
   --model {gpt-6-astra|gpt-6.1-sol} --effort {high|low} --write --prompt-file <prompt.txt>
 ```
+
+The `perl` wrapper puts the run in its own process group and prints the group ID (see **Process
+hygiene**). It works on Linux and macOS alike; `setsid` doesn't ship with macOS.
 
 `--write` is **required** to edit files — without it the sandbox is read-only and the task can only
 inspect ("workspace is mounted read-only"). Full-suite runs and self-commit also need network in the
 sandbox: set `[sandbox_workspace_write] network_access = true` in `~/.codex/config.toml` (otherwise
 loopback-binding tests fail and the orchestrator must run the full gate + commit outside the sandbox).
-Pass long prompts via `--prompt-file`. Structure the prompt: hand it the Architect design doc, require
-strict red-first TDD, running `{{TEST_CMD}}` + `{{INTEGRATION_CMD}}` + `{{LINT_CMD}}`, and a commit with
-the standard trailers. Treat early Astra/Sol runs as **probationary** — verify the red-first discipline
-and the integration run actually happened, not just that tests are green at the end.
+Treat early Astra/Sol runs as **probationary**. Check the Engineer report against the diff: the red
+output must come from the assertion, the discrimination proof must name a real mutation, and the
+gates must have actually run (a gate reported `not run` is the orchestrator's to run).
 
-**claude-opus-5-5[1m] (implementation)** — frontend/UI work runs as a Claude Engineer subagent in its
-own worktree (`isolation: worktree` on the subagent), same TDD discipline.
+**claude-opus-5-5[1m] (implementation)** — frontend/UI work runs as the `engineer` subagent in its own
+worktree. Its dispatch prompt carries the same inputs as the Codex prompt file above. Note that
+`isolation: worktree` branches from the default branch, not from the orchestrator's HEAD.
 
-**Reviewers** are always the opposite vendor, fresh every round, over the FULL PR diff:
+**Reviewers** are always the opposite vendor, fresh every round, over the FULL PR diff, one fresh
+reviewer per **review axis**, dispatched in parallel:
+- **claude-opus-5-5[1m] reviews Codex (backend/routine/boilerplate) work:** one `reviewer` subagent
+  per axis, all in the same message so they run concurrently. Each dispatch prompt names
+  `Axis: <correctness|spec|standards>`, `Base: origin/main`, `HEAD: <SHA>` and the spec location
+  (design doc / issue).
 - **Codex astra reviews Opus (frontend) work:**
-  `/codex:adversarial-review --model gpt-6-astra --base origin/main --scope branch [focus]`
-  (`--background` for large diffs, `--wait` otherwise). Codex review is strongest on code correctness, not
-  visual/UX taste — pair it with a Claude visual pass or a screenshot check for UI diffs.
-- **claude-opus-5-5[1m] reviews Codex (backend/routine/boilerplate) work:** a fresh Claude reviewer
-  subagent at `high` (`xhigh` on the high-stakes path), with the confidence-floor override. Boilerplate
-  (sol @ `low`) gets a light Opus pass, or none when 0-logic.
+  - correctness: `/codex:adversarial-review --model gpt-6-astra --base origin/main --scope branch
+    [focus]` (`--background` for large diffs, `--wait` otherwise). It is already adversarial and
+    reports every finding with a confidence, so it needs no confidence-floor override.
+  - spec and standards: a **read-only** companion `task` per axis (the command above **without**
+    `--write`, `--model gpt-6-astra --effort high`), with a prompt file of `Role: Reviewer. Read
+    agent-roles/reviewer.md and follow it exactly.` plus the axis, base, HEAD SHA and spec.
+  - Codex review is strongest on code correctness, not visual/UX taste. Pair it with a Claude visual
+    pass or a screenshot check for UI diffs.
 
-Effort mechanics: a Codex `task` takes `--effort` per call (`none`…`xhigh`), but a Codex review inherits
-`model_reasoning_effort` from `~/.codex/config.toml` (not per-call). Claude effort is a session setting
-(`/effort`, or `effortLevel` in settings), and subagent frontmatter has no effort field, so set the
-orchestrating session to the level the routing table calls for (`xhigh` on the high-stakes path) before
-dispatching Claude subagents. Both reviewers **report findings only** — they never edit.
-Post the review verbatim as the PR `### Code review` comment with the reviewed SHA in the body (a
-`Reviewed-SHA: <HEAD_SHA>` / `Reviewer: <model>` trailer) so `/merge`'s "comment body cites HEAD_SHA"
-check passes. Once per session, confirm both vendors are usable (Codex logged in, astra/sol respond)
-before relying on them.
+Effort mechanics: a Codex `task` takes `--effort` per call (`none`…`xhigh`), but
+`/codex:adversarial-review` inherits `model_reasoning_effort` from `~/.codex/config.toml` (not
+per-call). Claude subagents accept an `effort` frontmatter field, which overrides the session level.
+`architect` and `engineer` pin `xhigh`. `reviewer` deliberately has no `effort` field and inherits
+the session's, so set the orchestrating session (`/effort`) to `high`, or `xhigh` on the high-stakes
+path, before dispatching reviewers. Both vendors' reviewers **report findings only** — they never
+edit.
+Post the review verbatim as the PR `### Code review` comment, with one sub-section per axis and the
+adjudication of each finding. Put the reviewed SHA in the body (a `Reviewed-SHA: <HEAD_SHA>` /
+`Reviewer: <model>` trailer per axis) so the merge checklist's "comment cites HEAD_SHA" check passes.
+
+**Process hygiene.** Long Codex runs can outlive the Bash call that started them: a Bash tool timeout
+kills the shell, but not necessarily the companion and its `codex app-server` child.
+- Start companion `task` runs with the Bash tool's `run_in_background`, never in the foreground with a
+  timeout. Waiting is the harness's job; killing a run by accident is not.
+- Note the `codex pgid=` line the wrapper prints. If a run is aborted or abandoned, kill the whole
+  group (`kill -TERM -- -<pgid>`), not just the PID you started.
+- End every Codex dispatch, reviews included, by collecting or cancelling its jobs with the plugin's
+  job commands (`/codex:status`, `/codex:result`, `/codex:cancel`). Never leave a `--background`
+  review running.
+- Never `pkill -f codex`. It also kills other sessions' runs.
+- Processes that tests start are the Engineer's to tear down (`agent-roles/engineer.md`). Any it
+  reports under "Left running" are the orchestrator's to stop.
+
+**Once per session**, before relying on either vendor:
+- Confirm both vendors are usable (Codex logged in, astra/sol respond).
+- Check for leftover Codex processes from earlier sessions:
+  `ps -eo pid,pgid,etime,command | grep -E '[c]odex-companion|[c]odex app-server'`. Report any to the
+  human instead of killing them: another live session may own them.
+
+**Why not an MCP server for Codex.** Codex is dispatched through the plugin companion, not through an
+MCP wrapper (a third-party one, or Codex's own `codex mcp-server`). An MCP tool call blocks until it
+returns and is bounded by the client's tool timeout. That fits long TDD runs badly, and a timed-out
+call is exactly what leaves a Codex child orphaned. The third-party wrappers reviewed so far also drop
+per-call `--effort` and adversarial review. Revisit this if `codex mcp-server` gains asynchronous jobs
+and per-call effort.
 
 #### Review-finding adjudication
 
@@ -222,6 +293,9 @@ classify every finding:
 - **Out-of-scope / pre-existing / adjacent / scope-creep** → file an issue (area + priority label),
   link it in the `### Code review` comment; it does **not** block this PR.
 - **Minor / nit on changed lines** → fix if trivial; otherwise file a low-priority issue.
+- **Standards-axis smells** are judgement calls → fix, file, or record a one-line reason for rejecting
+  them in the review comment.
+- **Spec-axis scope creep** → remove it, or justify it in the PR body and in the review comment.
 
 The review loop exits when every finding is **fixed or filed** — not merely when the verdict reads
 `approve`. Merging over a `needs-attention` verdict is allowed **only** when every residual finding has
@@ -233,6 +307,24 @@ silently drops a finding is the exact failure this prevents.
 rationalized away to clear the gate. When in doubt, treat it as in-scope, or ask the human. On the
 high-stakes path, human approval on the final SHA is the backstop against mis-scoping a real blocker as
 pre-existing.
+
+#### Merge checklist
+
+Run these in order. If any step fails, stop. Don't merge around it. A repo may wrap this checklist in
+its own `/merge` skill, but the checklist is the policy.
+
+1. **Review record posted.** The PR has a `### Code review` comment with every axis's report, the
+   adjudication of each finding (fixed / deferred-to-`#N` / false-positive / rejected judgement call),
+   and a `Reviewed-SHA:` trailer.
+2. **No lost findings.** Every deferred finding (MINOR, pre-existing, out-of-scope) has an issue that
+   already exists and is linked from the review comment.
+3. **No SHA drift.** The PR's current head SHA equals the `Reviewed-SHA`. Any commit after the review,
+   including a rebase that changed content, needs a fresh review round. That round is not optional.
+4. **CI green** on that head SHA.
+5. **Human approval on that SHA**, on the high-stakes path only.
+6. **Squash-merge.** `Closes #N` closes the issue. If the PR ships only part of the issue, the
+   follow-up issue must already exist (see the operational rules below).
+7. **Clean up.** Remove the worktree, delete the branch, fast-forward the local `main`.
 
 ## Landing the Plane (Session Completion)
 
@@ -248,7 +340,8 @@ pre-existing.
    git push
    git status  # MUST show "up to date with origin"
    ```
-5. **Clean up** — remove the worktree once merged, prune remote branches.
+5. **Clean up** — remove the worktree once merged, prune remote branches, and collect or cancel any
+   Codex jobs this session started, so no Codex process outlives it (see **Process hygiene**).
 6. **Verify** — all changes committed AND pushed.
 7. **Hand off** — provide context for the next session.
 
