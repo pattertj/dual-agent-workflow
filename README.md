@@ -53,6 +53,7 @@ New to the whole idea? Read **[`GUIDE.md`](GUIDE.md)** first.
 ## The invariants (don't water these down)
 
 1. **Reviewer is always the opposite vendor of the author, fresh every round.** Never self-review.
+   Round 1 reviews the full change, and later rounds review only the delta since the last review.
 2. **TDD binds both vendors** — via the `tdd` skill: red test first at agreed seams, prove it
    discriminates by mutating the fix.
 3. **Every writing agent works in its own git worktree**; the shared main checkout stays read-only.

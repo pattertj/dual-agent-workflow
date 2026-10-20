@@ -67,6 +67,13 @@ report.
 - **Review rounds:** the orchestrator sends you adjudicated findings. Fix a behaviour finding the same
   way: first a failing test that reproduces it, then the fix. Don't argue in code. If you think a
   finding is wrong, say why in your report and leave it for the orchestrator.
+  - From round 2 on, each review covers only what changed since the last reviewed SHA. So add your fixes
+    as **new commits on top**. Don't amend, squash or rebase during the review loop: it turns a small
+    delta into a range-diff. If you must rebase (for example, a conflict with base), say so in your
+    report.
+  - Keep each fix to what the finding needs. Anything else you change in a fix round gets less review
+    than round 1 did.
+  - In your report, map each finding to the commit that fixes it.
 - Don't review or approve your own work, and don't merge.
 
 ## Report format
@@ -93,6 +100,10 @@ Commit: <SHA>   PR: <url or "not opened: reason">
 
 ### Deviations
 <from the design doc or seam list: what changed and why, or "none">
+
+### Findings fixed (review rounds only)
+| Finding | Fix commit | Reproducing test |
+|---------|------------|------------------|
 
 ### Left running
 <processes you couldn't stop, or "none">

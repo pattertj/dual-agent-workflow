@@ -121,11 +121,27 @@ thing, and vice versa:
 - **standards**: documented repo standards plus a fixed code-smell baseline, which are always
   MINOR judgement calls.
 
-| Change | Axes |
+| Change | Axes (round 1) |
 |---|---|
 | Staged pipeline (high-stakes) | correctness + spec + standards |
 | Everything else with logic | correctness + spec (spec is skipped when there is no issue or spec) |
 | Boilerplate (light pass) | correctness |
+
+**Round 1 reviews the full change; every later round reviews only the delta.** Round 1 covers the
+whole PR diff against base. From round 2 on, a review covers only what changed since the previous
+round's `Reviewed-SHA`. The reviewer first checks that each finding marked fixed really is fixed,
+then looks for defects the delta introduces, including breakage it causes in code it didn't touch.
+Delta rounds run **correctness**, plus every other axis that had a finding fixed in the previous
+round.
+
+The trade-off is deliberate. Delta rounds are faster, cheaper and stay focused on the fixes. But a
+defect that round 1 missed in unchanged code won't be caught by a later round. Round 1 has to be the
+thorough one.
+
+If the branch was rebased or rewritten, the previous SHA is no longer an ancestor of HEAD. The delta
+is then the `git range-diff` of the PR's own commits (see `agent-roles/reviewer.md`). A
+`range-diff` doesn't show how the rebased code interacts with the new upstream commits. CI on the
+new HEAD is the check for that.
 
 The full reviewer contract, shared by both vendors, is `agent-roles/reviewer.md`. Reviewers **report
 everything they find and classify severity (BLOCKER / MAJOR / MINOR) in a separate pass after
@@ -155,14 +171,16 @@ hand off via files/PRs, never shared state:
    `{{LINT_CMD}}`, opens a PR with `Closes #N`, and returns the evidence-backed Engineer report.
    Deviations from the design must be justified in the PR body.
 3. **Principal reviewer** — the **opposite vendor** of the Engineer, fresh every round (no
-   anchoring), over the FULL PR diff against base, on all three **review axes** in parallel. For the
+   anchoring). Round 1 covers the FULL PR diff against base on all three **review axes** in
+   parallel. Later rounds cover only the delta since the previous `Reviewed-SHA` (see **Review
+   axes**). For the
    usual high-stakes case (Astra-implemented) that is three `reviewer` subagents (Opus, session at
    `xhigh`). For Opus-implemented work it is **Codex `gpt-6-astra`** (mechanics below). The reviewer
    **reports findings only** — it never edits code; the
    Engineer applies fixes and the loop repeats until every finding is **fixed or filed** as a scoped
    issue — not merely until the verdict reads `approve`. Classify findings BLOCKER/MAJOR/MINOR when
-   recording. Expect this loop to earn its keep: successive fresh reviews routinely find distinct real
-   blockers.
+   recording. Fix rounds routinely introduce real blockers of their own, so verify every delta.
+   Round 1 is the only full pass, so dispatch it at full strength.
 4. **Merge**: follow the **Merge checklist** below.
 
 On the high-stakes path the Engineer is **Codex `gpt-6-astra`** and the reviewer is a fresh
@@ -229,19 +247,28 @@ gates must have actually run (a gate reported `not run` is the orchestrator's to
 worktree. Its dispatch prompt carries the same inputs as the Codex prompt file above. Note that
 `isolation: worktree` branches from the default branch, not from the orchestrator's HEAD.
 
-**Reviewers** are always the opposite vendor, fresh every round, over the FULL PR diff, one fresh
-reviewer per **review axis**, dispatched in parallel:
+**Reviewers** are always the opposite vendor, fresh every round, one fresh reviewer per **review
+axis**, dispatched in parallel. Round 1 is `Mode: full` over the whole PR diff. Later rounds are
+`Mode: delta` from the previous round's `Reviewed-SHA`, and the prompt carries that round's
+adjudicated findings for the axis:
 - **claude-opus-5-5[1m] reviews Codex (backend/routine/boilerplate) work:** one `reviewer` subagent
   per axis, all in the same message so they run concurrently. Each dispatch prompt names
-  `Axis: <correctness|spec|standards>`, `Base: origin/main`, `HEAD: <SHA>` and the spec location
-  (design doc / issue).
+  `Axis: <correctness|spec|standards>`, `Mode: <full|delta>`, `Base: origin/main`, `HEAD: <SHA>`,
+  the spec location (design doc / issue) and, in delta mode, `Previous: <Reviewed-SHA>` plus the
+  prior findings.
 - **Codex astra reviews Opus (frontend) work:**
-  - correctness: `/codex:adversarial-review --model gpt-6-astra --base origin/main --scope branch
-    [focus]` (`--background` for large diffs, `--wait` otherwise). It is already adversarial and
-    reports every finding with a confidence, so it needs no confidence-floor override.
+  - correctness: `/codex:adversarial-review --model gpt-6-astra --base <ref> --scope branch [focus]`
+    (`--background` for large diffs, `--wait` otherwise). `<ref>` is `origin/main` in round 1 and the
+    previous `Reviewed-SHA` in delta rounds. In delta rounds, put the prior findings to verify in the
+    focus text. If the branch was rebased (the previous SHA isn't an ancestor of HEAD),
+    `--base <prev>` would sweep in upstream commits. Run correctness as a read-only `task` under
+    `agent-roles/reviewer.md` instead, which handles the `range-diff`. The reviewer is already
+    adversarial and reports every finding with a confidence, so it needs no confidence-floor
+    override.
   - spec and standards: a **read-only** companion `task` per axis (the command above **without**
     `--write`, `--model gpt-6-astra --effort high`), with a prompt file of `Role: Reviewer. Read
-    agent-roles/reviewer.md and follow it exactly.` plus the axis, base, HEAD SHA and spec.
+    agent-roles/reviewer.md and follow it exactly.` plus the same inputs as the Claude dispatch
+    above.
   - Codex review is strongest on code correctness, not visual/UX taste. Pair it with a Claude visual
     pass or a screenshot check for UI diffs.
 
@@ -252,8 +279,8 @@ per-call). Claude subagents accept an `effort` frontmatter field, which override
 the session's, so set the orchestrating session (`/effort`) to `high`, or `xhigh` on the high-stakes
 path, before dispatching reviewers. Both vendors' reviewers **report findings only** — they never
 edit.
-Post the review verbatim as the PR `### Code review` comment, with one sub-section per axis and the
-adjudication of each finding. Put the reviewed SHA in the body (a `Reviewed-SHA: <HEAD_SHA>` /
+Post each round's review verbatim as a PR `### Code review` comment (`### Code review — round N`),
+with one sub-section per axis, its mode and range, and the adjudication of each finding. Put the reviewed SHA in the body (a `Reviewed-SHA: <HEAD_SHA>` /
 `Reviewer: <model>` trailer per axis) so the merge checklist's "comment cites HEAD_SHA" check passes.
 
 **Process hygiene.** Long Codex runs can outlive the Bash call that started them: a Bash tool timeout
@@ -289,7 +316,7 @@ A strong adversarial reviewer keeps surfacing real defects, including **pre-exis
 **adjudicating agent's** job (the orchestrator), never the reviewer's. After each review round,
 classify every finding:
 
-- **In-scope regression the diff introduces** → fix, then re-review.
+- **In-scope regression the diff introduces** → fix, then run a delta review round over the fix.
 - **Out-of-scope / pre-existing / adjacent / scope-creep** → file an issue (area + priority label),
   link it in the `### Code review` comment; it does **not** block this PR.
 - **Minor / nit on changed lines** → fix if trivial; otherwise file a low-priority issue.
@@ -313,13 +340,16 @@ pre-existing.
 Run these in order. If any step fails, stop. Don't merge around it. A repo may wrap this checklist in
 its own `/merge` skill, but the checklist is the policy.
 
-1. **Review record posted.** The PR has a `### Code review` comment with every axis's report, the
-   adjudication of each finding (fixed / deferred-to-`#N` / false-positive / rejected judgement call),
-   and a `Reviewed-SHA:` trailer.
+1. **Review record posted.** The PR has a `### Code review — round N` comment for every round, each
+   with every axis's report, the adjudication of each finding (fixed / deferred-to-`#N` /
+   false-positive / rejected judgement call) and a `Reviewed-SHA:` trailer.
+   - The rounds must chain without gaps: round 1 is `full` from base, and each later round's range
+     starts at the previous round's `Reviewed-SHA`.
+   - In the last round, every prior finding marked fixed was `verified`.
 2. **No lost findings.** Every deferred finding (MINOR, pre-existing, out-of-scope) has an issue that
    already exists and is linked from the review comment.
-3. **No SHA drift.** The PR's current head SHA equals the `Reviewed-SHA`. Any commit after the review,
-   including a rebase that changed content, needs a fresh review round. That round is not optional.
+3. **No SHA drift.** The PR's current head SHA equals the last round's `Reviewed-SHA`. Any commit after
+   that review, including a rebase, needs another delta round. That round is not optional.
 4. **CI green** on that head SHA.
 5. **Human approval on that SHA**, on the high-stakes path only.
 6. **Squash-merge.** `Closes #N` closes the issue. If the PR ships only part of the issue, the

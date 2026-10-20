@@ -15,7 +15,12 @@ MIT License, Copyright (c) 2026 Matt Pocock. -->
 ## Inputs (from the dispatch prompt)
 
 - **Axis**: `correctness`, `spec` or `standards`.
-- **Base** (the fixed point, usually `origin/main`) and the **HEAD SHA** under review.
+- **Mode**: `full` (round 1) or `delta` (round 2 onward).
+- **Range**: the **HEAD SHA** under review, plus:
+  - `full`: the **base** (usually `origin/main`).
+  - `delta`: the **previous Reviewed-SHA**, the last SHA a review round covered.
+- **Prior findings** (`delta` only): the previous round's adjudicated findings for your axis, each
+  marked fixed, deferred or rejected.
 - **Spec** (spec axis): the Architect design doc and/or the issue. The PR body may also justify
   deviations from the design.
 
@@ -23,14 +28,40 @@ MIT License, Copyright (c) 2026 Matt Pocock. -->
 
 Before reviewing anything:
 
-- `git rev-parse <base>` and `git rev-parse HEAD` must both resolve. HEAD must equal the SHA in your
+- Every ref in your dispatch prompt must resolve (`git rev-parse`). HEAD must equal the SHA in your
   dispatch prompt. If it doesn't, stop and say so: a review of the wrong SHA is worthless.
-- Review `git diff <base>...HEAD` (three dots, so you compare against the merge-base). List the commits
-  with `git log <base>..HEAD --oneline`.
-- If the diff is empty, stop and say so.
+- Pin the range for your mode:
+  - **`full`** (round 1): review `git diff <base>...HEAD` (three dots, so you compare against the
+    merge-base). List the commits with `git log <base>..HEAD --oneline`.
+  - **`delta`** (round 2 onward): review only what changed since the last reviewed SHA.
+    - If `git merge-base --is-ancestor <prev> HEAD` succeeds, review `git diff <prev>..HEAD` and list
+      the commits with `git log <prev>..HEAD --oneline`.
+    - If it fails, the branch was rebased or rewritten. Review
+      `git range-diff <base>..<prev> <base>..HEAD`, which shows how each of the PR's own commits
+      changed, without the upstream commits the rebase brought in. Conflict resolutions show up there,
+      and they are in scope.
+- If the range is empty, stop and say so.
 
-Review the **full** diff against base, not just the latest commit. Read surrounding code as needed. A
-hunk is only as correct as the callers and callees it interacts with.
+Review **only the pinned range**. Read any surrounding code you need, including the rest of the PR.
+A hunk is only as correct as the callers and callees it interacts with. But in `delta` mode, report
+only findings the delta **introduces or exposes**:
+- defects in the new code;
+- breakage the new code causes in code it didn't touch;
+- fixes that don't actually fix their finding.
+
+Code from earlier rounds was already reviewed. Don't re-review it. If you happen to see a serious
+defect there, report it once, labelled `outside delta`.
+
+### Delta mode: check the prior findings first
+
+Before looking for new findings, check every prior finding the orchestrator marked **fixed**:
+- Is the defect actually gone for the input or state that triggered it, not just for the one case the
+  new test covers?
+- For a behaviour finding, is there a test that reproduces it, and would that test fail without the
+  fix?
+
+Report each prior finding as `verified`, `not fixed` or `partially fixed`. A finding that isn't fixed
+is reported again at its original severity.
 
 ## 2. Review your axis
 
@@ -136,11 +167,14 @@ refactor findings come from.
 ```
 ## <Axis> review
 
-Base: <base> (<merge-base SHA>)   HEAD: <HEAD SHA>
+Mode: full | delta   Range: <base>...<HEAD SHA> | <prev SHA>..<HEAD SHA> | range-diff (rebased)
 Spec: <path / issue, or "n/a">   Standards sources: <files, or "n/a">
 
+### Prior findings (delta only)
+1. <prior finding, one line> — verified | not fixed | partially fixed: <evidence>
+
 ### Findings
-1. [BLOCKER|MAJOR|MINOR] [introduced|pre-existing] <file>:<line> — <one-line claim>
+1. [BLOCKER|MAJOR|MINOR] [introduced|pre-existing|outside delta] <file>:<line> — <one-line claim>
    Evidence: <the hunk, the spec line or the standard quoted; how it fails, with concrete input/state>
    Confidence: <high|medium|low>
    Suggested fix: <one or two lines; describe, don't write the patch>

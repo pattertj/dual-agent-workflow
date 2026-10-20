@@ -39,6 +39,15 @@ in a way that would change how already-adopted repos behave if they re-copied th
 
 ### Changed
 
+- **Breaking:** review rounds are incremental.
+  - Round 1 reviews the full PR diff against base. Each later round reviews only the delta since the
+    previous round's `Reviewed-SHA`: it first verifies each fixed finding, then looks for new defects
+    the delta introduces or exposes.
+  - After a rebase, the delta is the `range-diff` of the PR's own commits.
+  - Delta rounds run correctness, plus every axis that had a finding fixed.
+  - Engineers add fixes as new commits rather than amending or rebasing mid-loop, and map each finding
+    to its fix commit.
+  - The merge checklist requires a gap-free chain of rounds from base to HEAD.
 - **Breaking:** the confidence-floor override is now built into the repo's own `reviewer` subagent
   instead of being restated in each dispatch prompt. Re-copy `templates/` along with `AGENTS.md`.
 - Engineer reports are evidence-backed (red output, discrimination proof, gate results, deviations,

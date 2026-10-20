@@ -92,7 +92,8 @@ engineer contract falls back to minimum TDD rules.
 
 ## Step 5 — Preserve these invariants (they are the point, don't water them down)
 
-1. **Reviewer is always the opposite vendor of the author, fresh every round.** Claude reviews Codex;
+1. **Reviewer is always the opposite vendor of the author, fresh every round** (round 1 reviews the
+   full change; later rounds review only the delta since the last reviewed SHA). Claude reviews Codex;
    Codex reviews Claude. Never let an author review its own work.
 2. **TDD binds both vendors** — via the `tdd` skill: red test first at agreed seams, prove it
    discriminates by mutating the fix.

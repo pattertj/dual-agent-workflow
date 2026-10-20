@@ -40,7 +40,7 @@ review) and *up* for risky ones (a full staged pipeline + human sign-off).
 | **Orchestrator** | Claude Code | The agent *you* talk to. It plans, dispatches the others, and adjudicates review findings. |
 | **Architect** | Claude (Opus 5.5, read-only) | For risky work: traces the code, confirms the root cause, writes a design doc. Doesn't write code. |
 | **Engineer** | Claude *or* Codex | Writes the code, test-first, in an isolated worktree. Frontend → Claude; backend/high-stakes → Codex. |
-| **Reviewer** | The *opposite* vendor of the Engineer | Reads the full diff, reports findings. **Never edits.** |
+| **Reviewer** | The *opposite* vendor of the Engineer | Reads the full diff in round 1, then only the fixes in later rounds, and reports findings. **Never edits.** |
 | **Human (you)** | You | Approve the final commit on high-stakes changes; otherwise just steer. |
 
 The key constraints: the reviewer is **always the opposite vendor**, is **fresh every round** (no
@@ -108,7 +108,9 @@ follows only its own tag and ignores the other's.
    design names, red test first, watch it fail, then make it pass. It runs the full suite +
    integration + lint, opens a PR, and reports its evidence.
 3. **Reviewers** (fresh Claude, one per axis: correctness, spec, standards) review the *entire* diff
-   and report findings. Codex fixes them. Repeat
+   in round 1 and report findings. Each later round reviews only the fix commits since the last
+   round: it checks every fix actually fixed its finding, then looks for new problems the fixes
+   introduced. Codex fixes them. Repeat
    with a **new** reviewer each round until every finding is **fixed or filed**.
 4. **You approve the final commit SHA.** (This human gate applies *only* to high-stakes work.)
 5. Merge, close the issue, clean up the worktree.
@@ -126,6 +128,9 @@ follows only its own tag and ignores the other's.
   follows every convention" can't hide "it does the wrong thing".
 - **Fresh reviewer every round.** Re-using the same reviewer anchors it to its earlier take. New one
   each time.
+- **Only round 1 sees the whole change.** Later rounds review just the fixes, so make round 1
+  thorough. Engineers add fixes as new commits rather than amending or rebasing mid-review, which
+  keeps each delta small and readable.
 - **Everyone works in their own worktree.** Two agents in one checkout will clobber each other and leak
   edits into `main`.
 - **Out-of-scope ≠ ignore.** A real bug the diff didn't introduce still gets a filed issue before
