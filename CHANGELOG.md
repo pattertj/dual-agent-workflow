@@ -11,6 +11,8 @@ in a way that would change how already-adopted repos behave if they re-copied th
 
 <!-- Add new entries here as you revise the policy. -->
 
+## [0.3.0] - 2026-10-20
+
 ### Added
 
 - **Role definitions** in `templates/`, copied into the target repo as-is:
@@ -106,6 +108,7 @@ in a way that would change how already-adopted repos behave if they re-copied th
 - `.github/ISSUE_TEMPLATE/policy-change.md` — issue template for proposing policy changes.
 - `LICENSE` — MIT.
 
-[Unreleased]: https://github.com/pattertj/dual-agent-workflow/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/pattertj/dual-agent-workflow/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/pattertj/dual-agent-workflow/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/pattertj/dual-agent-workflow/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/pattertj/dual-agent-workflow/releases/tag/v0.1.0
