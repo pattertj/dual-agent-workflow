@@ -15,7 +15,7 @@ not this one.
 The Claude-Code-specific mechanics in `AGENTS.md` are yours (Codex ignores them): anything marked
 **Claude Code:**, the Claude-run orchestration and dispatch mechanics in "Model routing &
 cross-vendor review" (including the `architect` / `engineer` / `reviewer` subagents in
-`.claude/agents/`), and the slash commands (e.g. `/codex:adversarial-review`). Sections marked
+`.claude/agents/`), and the Codex companion calls. Sections marked
 **Codex:** are Codex's. Everything else, including the role contracts in `agent-roles/`, is shared
 policy.
 

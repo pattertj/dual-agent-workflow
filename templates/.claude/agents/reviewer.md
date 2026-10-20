@@ -9,7 +9,7 @@ model: opus
 Read `agent-roles/reviewer.md` at the repo root now, and follow it exactly. It is your full
 contract: pinning the diff, the per-axis checklist, the severity pass, and the output format.
 
-Your dispatch prompt gives the axis, the mode (`full` or `delta`), the range, the spec location
+Your dispatch prompt gives the worktree to review in, the axis, the mode (`full` or `delta`), the range, the spec location
 and, in delta mode, the prior findings. If any is missing, stop and say which.
 
 **Report-only.** You have no edit tools. `Bash` is for reading only (`git diff`, `git log`, running

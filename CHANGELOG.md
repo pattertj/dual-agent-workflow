@@ -31,9 +31,18 @@ in a way that would change how already-adopted repos behave if they re-copied th
 - **Merge checklist** inline in `AGENTS.md` (review record, no lost findings, no SHA drift, CI, human
   SHA approval on the high-stakes path, squash-merge, clean-up). It replaces the dependency on an
   unshipped `/merge` skill.
-- **Process hygiene** for Codex dispatch: background runs, a process group per run via a portable
-  `perl` wrapper, killing the whole group on abort, collecting or cancelling plugin jobs, a check for
-  leftover Codex processes once per session, and engineers tearing down what their tests start.
+- **Process hygiene** for Codex dispatch, based on the `codex` plugin's source:
+  - The plugin starts a detached app-server broker per git workspace root, so one per Engineer
+    worktree, with no idle timeout. Its `SessionEnd` hook tears down only the session directory's
+    broker, so worktree brokers leak.
+  - The policy now tears down each worktree's broker before removing the worktree, by running the
+    plugin's own `SessionEnd` cleanup against that worktree.
+  - Other rules: background runs, collecting or cancelling jobs through the companion, a check for
+    leftover brokers once per session, and engineers tearing down what their tests start.
+- Every companion call passes `--cwd <worktree>`, and reviewer subagents get a `Worktree:` input.
+  Without them, jobs, brokers and reviews run against the orchestrator's checkout.
+- The orchestrator calls companion `adversarial-review`, `status`, `result` and `cancel` directly. The
+  plugin's `/codex:*` slash commands are `disable-model-invocation`, so a model can't run them.
 - A recorded decision on why Codex is dispatched through the plugin companion rather than an MCP
   server, and what would reopen the question.
 

@@ -67,8 +67,8 @@ Confirm the `codex` plugin is installed (that cache path resolves) and Codex is 
 installed on the machine that will run this, leave the section intact but add
 `TODO(human): install the codex plugin (/plugin marketplace add openai/codex-plugin-cc,
 /plugin install codex@openai-codex, /codex:setup) before this pipeline can run`. Do **not** invent a
-different command. The section also wraps this command in a `perl` process-group launcher. Keep that
-wrapper too.
+different command. Keep the `--cwd <worktree>` flag and the broker-teardown step in **Process
+hygiene**. Without them, Codex processes leak, one set per worktree.
 
 Also confirm the `tdd` skill is installed for both agents. If it isn't, add
 `TODO(human): npx skills add https://github.com/mattpocock/skills --skill tdd`. Without it, the

@@ -100,7 +100,7 @@ inseparable, the high-stakes logic governs → Astra.
 | Implemented by | Reviewer |
 |---|---|
 | Codex astra / sol (backend, routine, boilerplate) | **claude-opus-5-5[1m] @ `high`** — `xhigh` on the high-stakes path |
-| claude-opus-5-5[1m] (frontend) | **Codex `gpt-6-astra` @ `high`** via `/codex:adversarial-review` |
+| claude-opus-5-5[1m] (frontend) | **Codex `gpt-6-astra` @ `high`** via companion `adversarial-review` |
 | Boilerplate (sol @ `low`) | light Opus pass; **skip** when 0-logic |
 | Docs / comments | none |
 
@@ -227,13 +227,16 @@ hardcode it; the cache dir changes on plugin update):
 
 ```
 CODEX_ROOT=$(ls -d ~/.claude/plugins/cache/openai-codex/codex/*/ | sort -V | tail -1)
-perl -e 'print STDERR "codex pgid=$$\n"; setpgrp(0,0); exec @ARGV' -- \
-  node "$CODEX_ROOT/scripts/codex-companion.mjs" task \
+node "$CODEX_ROOT/scripts/codex-companion.mjs" task --cwd <worktree> \
   --model {gpt-6-astra|gpt-6.1-sol} --effort {high|low} --write --prompt-file <prompt.txt>
 ```
 
-The `perl` wrapper puts the run in its own process group and prints the group ID (see **Process
-hygiene**). It works on Linux and macOS alike; `setsid` doesn't ship with macOS.
+**Always pass `--cwd <worktree>`** to every companion call (`task`, `adversarial-review`, `status`,
+`result`, `cancel`). The plugin keys its jobs and its app-server broker by git workspace root. A call
+without `--cwd` runs against the orchestrator's checkout, not the Engineer's worktree.
+
+The orchestrator calls the companion script directly. The plugin's `/codex:*` slash commands are
+marked `disable-model-invocation`, so only a human can run them.
 
 `--write` is **required** to edit files — without it the sandbox is read-only and the task can only
 inspect ("workspace is mounted read-only"). Full-suite runs and self-commit also need network in the
@@ -253,45 +256,61 @@ axis**, dispatched in parallel. Round 1 is `Mode: full` over the whole PR diff. 
 adjudicated findings for the axis:
 - **claude-opus-5-5[1m] reviews Codex (backend/routine/boilerplate) work:** one `reviewer` subagent
   per axis, all in the same message so they run concurrently. Each dispatch prompt names
-  `Axis: <correctness|spec|standards>`, `Mode: <full|delta>`, `Base: origin/main`, `HEAD: <SHA>`,
-  the spec location (design doc / issue) and, in delta mode, `Previous: <Reviewed-SHA>` plus the
-  prior findings.
+  `Worktree: <path>`, `Axis: <correctness|spec|standards>`, `Mode: <full|delta>`,
+  `Base: origin/main`, `HEAD: <SHA>`, the spec location (design doc / issue) and, in delta mode,
+  `Previous: <Reviewed-SHA>` plus the prior findings. The subagent starts in the orchestrator's
+  checkout, so the `Worktree:` line is what points it at the code under review.
 - **Codex astra reviews Opus (frontend) work:**
-  - correctness: `/codex:adversarial-review --model gpt-6-astra --base <ref> --scope branch [focus]`
-    (`--background` for large diffs, `--wait` otherwise). `<ref>` is `origin/main` in round 1 and the
-    previous `Reviewed-SHA` in delta rounds. In delta rounds, put the prior findings to verify in the
+  - correctness: `node "$CODEX_ROOT/scripts/codex-companion.mjs" adversarial-review --cwd <worktree>
+    --model gpt-6-astra --base <ref> --scope branch [focus]`, run with the Bash tool's
+    `run_in_background`. `<ref>` is `origin/main` in round 1 and the previous `Reviewed-SHA` in delta
+    rounds. In delta rounds, put the prior findings to verify in the
     focus text. If the branch was rebased (the previous SHA isn't an ancestor of HEAD),
     `--base <prev>` would sweep in upstream commits. Run correctness as a read-only `task` under
     `agent-roles/reviewer.md` instead, which handles the `range-diff`. The reviewer is already
     adversarial and reports every finding with a confidence, so it needs no confidence-floor
     override.
-  - spec and standards: a **read-only** companion `task` per axis (the command above **without**
-    `--write`, `--model gpt-6-astra --effort high`), with a prompt file of `Role: Reviewer. Read
+  - spec and standards: a **read-only** companion `task` per axis (the Engineer command above
+    **without** `--write`, with `--cwd <worktree> --model gpt-6-astra --effort high`), with a prompt file of `Role: Reviewer. Read
     agent-roles/reviewer.md and follow it exactly.` plus the same inputs as the Claude dispatch
     above.
   - Codex review is strongest on code correctness, not visual/UX taste. Pair it with a Claude visual
     pass or a screenshot check for UI diffs.
 
 Effort mechanics: a Codex `task` takes `--effort` per call (`none`…`xhigh`), but
-`/codex:adversarial-review` inherits `model_reasoning_effort` from `~/.codex/config.toml` (not
+`adversarial-review` takes no `--effort` and inherits `model_reasoning_effort` from `~/.codex/config.toml` (not
 per-call). Claude subagents accept an `effort` frontmatter field, which overrides the session level.
 `architect` and `engineer` pin `xhigh`. `reviewer` deliberately has no `effort` field and inherits
 the session's, so set the orchestrating session (`/effort`) to `high`, or `xhigh` on the high-stakes
 path, before dispatching reviewers. Both vendors' reviewers **report findings only** — they never
 edit.
 Post each round's review verbatim as a PR `### Code review` comment (`### Code review — round N`),
-with one sub-section per axis, its mode and range, and the adjudication of each finding. Put the reviewed SHA in the body (a `Reviewed-SHA: <HEAD_SHA>` /
-`Reviewer: <model>` trailer per axis) so the merge checklist's "comment cites HEAD_SHA" check passes.
+with one sub-section per axis, its mode and range, and the adjudication of each finding. Put the
+reviewed SHA in the body (a `Reviewed-SHA: <HEAD_SHA>` / `Reviewer: <model>` trailer per axis) so the
+merge checklist's "comment cites HEAD_SHA" check passes.
 
-**Process hygiene.** Long Codex runs can outlive the Bash call that started them: a Bash tool timeout
-kills the shell, but not necessarily the companion and its `codex app-server` child.
-- Start companion `task` runs with the Bash tool's `run_in_background`, never in the foreground with a
+**Process hygiene.** The `codex` plugin starts a long-lived **app-server broker** (a
+`app-server-broker.mjs` process plus its `codex app-server` child) **per git workspace root**.
+Every Engineer worktree therefore gets its own broker. Brokers and `--background` task workers are
+spawned *detached* (their own session), so killing the shell or process group that launched them
+doesn't reach them, and brokers have no idle timeout. The plugin's `SessionEnd` hook tears down only
+the broker for the session's own directory. Worktree brokers outlive the session unless you tear them
+down, and so does every broker if the session ends abnormally.
+- Start companion runs with the Bash tool's `run_in_background`, never in the foreground with a
   timeout. Waiting is the harness's job; killing a run by accident is not.
-- Note the `codex pgid=` line the wrapper prints. If a run is aborted or abandoned, kill the whole
-  group (`kill -TERM -- -<pgid>`), not just the PID you started.
-- End every Codex dispatch, reviews included, by collecting or cancelling its jobs with the plugin's
-  job commands (`/codex:status`, `/codex:result`, `/codex:cancel`). Never leave a `--background`
-  review running.
+- Collect each job's output (`codex-companion.mjs result --cwd <worktree> [job-id]`). To abandon a
+  run, cancel it (`codex-companion.mjs cancel --cwd <worktree> <job-id>`; `status --cwd <worktree>`
+  lists the jobs). `cancel` interrupts the Codex turn and kills the worker's process tree.
+- **Before removing an Engineer worktree, tear down its broker.** Run the plugin's own `SessionEnd`
+  cleanup pointed at that worktree. It shuts down the broker and its app-server, kills this session's
+  still-running jobs there, and clears the plugin's state for the worktree:
+  ```
+  printf '{"cwd":"%s","session_id":"%s"}' "<worktree>" "$CODEX_COMPANION_SESSION_ID" |
+    node "$CODEX_ROOT/scripts/session-lifecycle-hook.mjs" SessionEnd
+  ```
+  Run it while the worktree still exists: the plugin resolves the worktree's git root to find its
+  state. This calls an internal plugin script, not a documented command, so re-check it after a plugin
+  update.
 - Never `pkill -f codex`. It also kills other sessions' runs.
 - Processes that tests start are the Engineer's to tear down (`agent-roles/engineer.md`). Any it
   reports under "Left running" are the orchestrator's to stop.
@@ -299,8 +318,9 @@ kills the shell, but not necessarily the companion and its `codex app-server` ch
 **Once per session**, before relying on either vendor:
 - Confirm both vendors are usable (Codex logged in, astra/sol respond).
 - Check for leftover Codex processes from earlier sessions:
-  `ps -eo pid,pgid,etime,command | grep -E '[c]odex-companion|[c]odex app-server'`. Report any to the
-  human instead of killing them: another live session may own them.
+  `ps -eo pid,etime,command | grep -E '[a]pp-server-broker|[c]odex app-server|[c]odex-companion'`.
+  Each broker's command line shows its `--cwd`. A broker whose worktree no longer exists is a leak.
+  Report any to the human instead of killing them: another live session may own them.
 
 **Why not an MCP server for Codex.** Codex is dispatched through the plugin companion, not through an
 MCP wrapper (a third-party one, or Codex's own `codex mcp-server`). An MCP tool call blocks until it
@@ -354,7 +374,8 @@ its own `/merge` skill, but the checklist is the policy.
 5. **Human approval on that SHA**, on the high-stakes path only.
 6. **Squash-merge.** `Closes #N` closes the issue. If the PR ships only part of the issue, the
    follow-up issue must already exist (see the operational rules below).
-7. **Clean up.** Remove the worktree, delete the branch, fast-forward the local `main`.
+7. **Clean up.** Tear down the worktree's Codex broker (see **Process hygiene**), then remove the
+   worktree, delete the branch, and fast-forward the local `main`.
 
 ## Landing the Plane (Session Completion)
 
@@ -370,8 +391,9 @@ its own `/merge` skill, but the checklist is the policy.
    git push
    git status  # MUST show "up to date with origin"
    ```
-5. **Clean up** — remove the worktree once merged, prune remote branches, and collect or cancel any
-   Codex jobs this session started, so no Codex process outlives it (see **Process hygiene**).
+5. **Clean up** — collect or cancel any Codex jobs this session started, tear down each worktree's
+   Codex broker, then remove the worktree once merged and prune remote branches, so no Codex process
+   outlives the session (see **Process hygiene**).
 6. **Verify** — all changes committed AND pushed.
 7. **Hand off** — provide context for the next session.
 

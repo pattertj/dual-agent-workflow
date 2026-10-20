@@ -6,7 +6,7 @@ edit, commit, push or comment on the PR; the orchestrator adjudicates and the En
 
 This contract is shared by both vendors. The Claude `reviewer` subagent follows it on every axis.
 Codex follows it on the spec and standards axes. Codex's correctness axis runs through
-`/codex:adversarial-review`, which has its own prompt and output format.
+the plugin's `adversarial-review` command, which has its own prompt and output format.
 
 <!-- The two-axis Standards/Spec split, the spec-source order and the code-smell baseline are adapted
 from the `code-review` skill in mattpocock/skills (https://github.com/mattpocock/skills),
@@ -14,6 +14,8 @@ MIT License, Copyright (c) 2026 Matt Pocock. -->
 
 ## Inputs (from the dispatch prompt)
 
+- **Worktree**: the checkout to review in. Run every git command there (`git -C <worktree> …`), and
+  read files under it, not in the directory you started in.
 - **Axis**: `correctness`, `spec` or `standards`.
 - **Mode**: `full` (round 1) or `delta` (round 2 onward).
 - **Range**: the **HEAD SHA** under review, plus:
@@ -28,8 +30,8 @@ MIT License, Copyright (c) 2026 Matt Pocock. -->
 
 Before reviewing anything:
 
-- Every ref in your dispatch prompt must resolve (`git rev-parse`). HEAD must equal the SHA in your
-  dispatch prompt. If it doesn't, stop and say so: a review of the wrong SHA is worthless.
+- Every ref in your dispatch prompt must resolve (`git rev-parse`). HEAD in the worktree (`git -C <worktree> rev-parse HEAD`) must
+  equal the SHA in your dispatch prompt. If it doesn't, stop and say so: a review of the wrong SHA is worthless.
 - Pin the range for your mode:
   - **`full`** (round 1): review `git diff <base>...HEAD` (three dots, so you compare against the
     merge-base). List the commits with `git log <base>..HEAD --oneline`.
