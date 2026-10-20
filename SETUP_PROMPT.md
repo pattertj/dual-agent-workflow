@@ -1,8 +1,8 @@
 # Setup prompt — port the Claude/Codex cross-vendor agent policy into this repo
 
 Paste everything below the line into a fresh Claude Code (or Codex) session **running inside the target
-repository**. Attach `AGENTS.template.md` (and `CLAUDE.template.md`, used only if the repo needs a
-`CLAUDE.md`) alongside it.
+repository**. Attach `AGENTS.template.md`, the contents of `templates/` (the role files), and
+`CLAUDE.template.md` (used only if the repo needs a `CLAUDE.md`) alongside it.
 
 ---
 
@@ -12,9 +12,11 @@ opposite vendor of the author**, so review is independent by construction. Claud
 orchestration + review of Codex's work; Codex (`gpt-6-astra` for high-stakes backend, `gpt-6.1-sol`
 for routine) handles backend implementation + review of Claude's frontend work.
 
-I've attached `AGENTS.template.md` (the canonical shared policy) and `CLAUDE.template.md` (an optional
+I've attached `AGENTS.template.md` (the canonical shared policy), the role files from `templates/`
+(`agent-roles/engineer.md`, `agent-roles/reviewer.md`, `.claude/agents/architect.md`,
+`.claude/agents/engineer.md`, `.claude/agents/reviewer.md`), and `CLAUDE.template.md` (an optional
 thin pointer that imports it). Adapt the policy to THIS repo and write it in place as `AGENTS.md` at the
-repo root. Codex and Claude Code (v2.1.277+) both read `AGENTS.md` natively, so a `CLAUDE.md` is only
+repo root. Write the role files at those same paths relative to the repo root. Codex and Claude Code (v2.1.277+) both read `AGENTS.md` natively, so a `CLAUDE.md` is only
 needed in the cases in Step 4. The vendors, model IDs, and Codex dispatch command are
 already filled in — **do not genericize them**. You only need to supply the repo-specific bits.
 
@@ -35,7 +37,7 @@ If any are ambiguous, **ask me** before writing the files.
 
 ## Step 2 — Fill in the placeholders
 
-Replace every `{{...}}` token:
+Replace every `{{...}}` token, in `AGENTS.md` **and** `agent-roles/engineer.md`:
 
 | Placeholder | Meaning |
 |---|---|
@@ -65,7 +67,12 @@ Confirm the `codex` plugin is installed (that cache path resolves) and Codex is 
 installed on the machine that will run this, leave the section intact but add
 `TODO(human): install the codex plugin (/plugin marketplace add openai/codex-plugin-cc,
 /plugin install codex@openai-codex, /codex:setup) before this pipeline can run`. Do **not** invent a
-different command.
+different command. Keep the `--cwd <worktree>` flag and the broker-teardown step in **Process
+hygiene**. Without them, Codex processes leak, one set per worktree.
+
+Also confirm the `tdd` skill is installed for both agents. If it isn't, add
+`TODO(human): npx skills add https://github.com/mattpocock/skills --skill tdd`. Without it, the
+engineer contract falls back to minimum TDD rules.
 
 ## Step 4 — Wire up the files correctly
 
@@ -75,20 +82,26 @@ different command.
   `@AGENTS.md` line. Use `CLAUDE.template.md` as the shape. `CLAUDE.md` must contain **no policy of its
   own** — move any policy it already has into `AGENTS.md` so the two never drift.
 - Keep every **Claude Code:** / **Codex:** marker so each agent follows only its own mechanics.
+- If `.claude/agents/` already has an `architect`, `engineer` or `reviewer` agent, don't overwrite it.
+  Show me a merge plan first.
+- The role files hold only role contracts. Don't copy policy from `AGENTS.md` into them, and don't
+  move theirs into `AGENTS.md`.
 - Delete the `> Placeholder key` block from `AGENTS.md` once you're done.
 - If this repo already has a `CLAUDE.md`/`AGENTS.md` with real content, don't blow it away — show me a
   merge plan first.
 
 ## Step 5 — Preserve these invariants (they are the point, don't water them down)
 
-1. **Reviewer is always the opposite vendor of the author, fresh every round.** Claude reviews Codex;
+1. **Reviewer is always the opposite vendor of the author, fresh every round** (round 1 reviews the
+   full change; later rounds review only the delta since the last reviewed SHA). Claude reviews Codex;
    Codex reviews Claude. Never let an author review its own work.
-2. **TDD binds both vendors** — red test first, prove it discriminates by mutating the fix.
+2. **TDD binds both vendors** — via the `tdd` skill: red test first at agreed seams, prove it
+   discriminates by mutating the fix.
 3. **Every writing agent works in its own git worktree**; the shared main checkout stays read-only.
 4. **Reviewers report findings only; they never edit.** The engineer applies fixes and re-review runs
    on the final diff.
-5. **Override the Claude reviewer's confidence floor at dispatch** — report everything, classify
-   severity in a separate pass. (Codex's `/codex:adversarial-review` needs no override.)
+5. **Reviewers report everything, on separate axes** (correctness / spec / standards), with no
+   confidence floor or word cap, and classify severity in a separate pass.
 6. **The review loop exits when every finding is fixed-or-filed**, not when the verdict says
    "approve"; deferral issues must exist before merge.
 7. **Human approval on the final SHA is required only for the high-stakes path.**
