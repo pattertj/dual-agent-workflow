@@ -15,7 +15,7 @@ the one that applies to you, ignore the other.
 > - `{{TASK_TRACKER}}` — where issues live (e.g. "GitHub Issues on org/repo", via the `gh` CLI).
 > - `{{TEST_CMD}}` / `{{INTEGRATION_CMD}}` / `{{LINT_CMD}}` — the full-suite, integration-tier, and lint
 >   commands the Engineer must run before opening a PR.
-> - Model IDs below (`claude-opus-5-5[1m]`, `gpt-6-astra`, `gpt-6.1-sol`) are the current Claude/Codex
+> - Model IDs below (`claude-opus-5-5[1m]`, `gpt-6.2-astra`, `gpt-6.2-sol`) are the current Claude/Codex
 >   tiers — bump them if they've moved on. Pass full Codex IDs: the `codex` plugin doesn't resolve
 >   `astra`/`sol` aliases.
 
@@ -91,16 +91,16 @@ inseparable, the high-stakes logic governs → Astra.
 | Work type | Implementer | Effort |
 |---|---|---|
 | Frontend / UI / UX, visual/design | **claude-opus-5-5[1m]** | `xhigh` |
-| Backend, high-stakes — {{HIGH_STAKES_DOMAIN}}, logic-bearing migrations | **Codex `gpt-6-astra`** | `high` |
-| Routine backend / coding — ordinary services, non-UI, CRUD, analytics/admin reads, glue | **Codex `gpt-6.1-sol`** | `high` |
-| Boilerplate / mechanical — codegen, mass rename, config, deps, test scaffolding, 0-logic edits | **Codex `gpt-6.1-sol`** | `low` |
+| Backend, high-stakes — {{HIGH_STAKES_DOMAIN}}, logic-bearing migrations | **Codex `gpt-6.2-astra`** | `high` |
+| Routine backend / coding — ordinary services, non-UI, CRUD, analytics/admin reads, glue | **Codex `gpt-6.2-sol`** | `high` |
+| Boilerplate / mechanical — codegen, mass rename, config, deps, test scaffolding, 0-logic edits | **Codex `gpt-6.2-sol`** | `low` |
 
 **Reviewer = the opposite vendor @ `high`** (mechanics in "Model routing & cross-vendor review"):
 
 | Implemented by | Reviewer |
 |---|---|
 | Codex astra / sol (backend, routine, boilerplate) | **claude-opus-5-5[1m] @ `high`** — `xhigh` on the high-stakes path |
-| claude-opus-5-5[1m] (frontend) | **Codex `gpt-6-astra` @ `high`** via companion `adversarial-review` |
+| claude-opus-5-5[1m] (frontend) | **Codex `gpt-6.2-astra` @ `high`** via companion `adversarial-review` |
 | Boilerplate (sol @ `low`) | light Opus pass; **skip** when 0-logic |
 | Docs / comments | none |
 
@@ -163,7 +163,7 @@ hand off via files/PRs, never shared state:
    alternatives, and returns a self-sufficient design doc: files and functions, **seams under test**,
    a TDD test plan, failure modes and out-of-scope. The orchestrator stores the doc with the issue in
    {{TASK_TRACKER}} and hands it to the Engineer verbatim.
-2. **Engineer** (**Codex `gpt-6-astra`** for high-stakes backend — this pipeline's default; a high-risk
+2. **Engineer** (**Codex `gpt-6.2-astra`** for high-stakes backend — this pipeline's default; a high-risk
    frontend change uses the same cross-vendor routing, Opus-built and Astra-reviewed, but without this
    pipeline's human-SHA gate; own worktree) — follows `agent-roles/engineer.md`: implements the design
    with the `tdd` skill at the design's seams (red first, watch it fail; prove discrimination by
@@ -175,7 +175,7 @@ hand off via files/PRs, never shared state:
    parallel. Later rounds cover only the delta since the previous `Reviewed-SHA` (see **Review
    axes**). For the
    usual high-stakes case (Astra-implemented) that is three `reviewer` subagents (Opus, session at
-   `xhigh`). For Opus-implemented work it is **Codex `gpt-6-astra`** (mechanics below). The reviewer
+   `xhigh`). For Opus-implemented work it is **Codex `gpt-6.2-astra`** (mechanics below). The reviewer
    **reports findings only** — it never edits code; the
    Engineer applies fixes and the loop repeats until every finding is **fixed or filed** as a scoped
    issue — not merely until the verdict reads `approve`. Classify findings BLOCKER/MAJOR/MINOR when
@@ -183,7 +183,7 @@ hand off via files/PRs, never shared state:
    Round 1 is the only full pass, so dispatch it at full strength.
 4. **Merge**: follow the **Merge checklist** below.
 
-On the high-stakes path the Engineer is **Codex `gpt-6-astra`** and the reviewer is a fresh
+On the high-stakes path the Engineer is **Codex `gpt-6.2-astra`** and the reviewer is a fresh
 **claude-opus-5-5[1m] @ `xhigh`** (cross-vendor by construction); these changes additionally need
 **human approval on the final SHA** before merge. That is the only category requiring it — everything
 else merges on the review above.
@@ -228,7 +228,7 @@ hardcode it; the cache dir changes on plugin update):
 ```
 CODEX_ROOT=$(ls -d ~/.claude/plugins/cache/openai-codex/codex/*/ | sort -V | tail -1)
 node "$CODEX_ROOT/scripts/codex-companion.mjs" task --cwd <worktree> \
-  --model {gpt-6-astra|gpt-6.1-sol} --effort {high|low} --write --prompt-file <prompt.txt>
+  --model {gpt-6.2-astra|gpt-6.2-sol} --effort {high|low} --write --prompt-file <prompt.txt>
 ```
 
 **Always pass `--cwd <worktree>`** to every companion call (`task`, `adversarial-review`, `status`,
@@ -262,7 +262,7 @@ adjudicated findings for the axis:
   checkout, so the `Worktree:` line is what points it at the code under review.
 - **Codex astra reviews Opus (frontend) work:**
   - correctness: `node "$CODEX_ROOT/scripts/codex-companion.mjs" adversarial-review --cwd <worktree>
-    --model gpt-6-astra --base <ref> --scope branch [focus]`, run with the Bash tool's
+    --model gpt-6.2-astra --base <ref> --scope branch [focus]`, run with the Bash tool's
     `run_in_background`. `<ref>` is `origin/main` in round 1 and the previous `Reviewed-SHA` in delta
     rounds. In delta rounds, put the prior findings to verify in the
     focus text. If the branch was rebased (the previous SHA isn't an ancestor of HEAD),
@@ -271,13 +271,14 @@ adjudicated findings for the axis:
     adversarial and reports every finding with a confidence, so it needs no confidence-floor
     override.
   - spec and standards: a **read-only** companion `task` per axis (the Engineer command above
-    **without** `--write`, with `--cwd <worktree> --model gpt-6-astra --effort high`), with a prompt file of `Role: Reviewer. Read
+    **without** `--write`, with `--cwd <worktree> --model gpt-6.2-astra --effort high`), with a prompt file of `Role: Reviewer. Read
     agent-roles/reviewer.md and follow it exactly.` plus the same inputs as the Claude dispatch
     above.
   - Codex review is strongest on code correctness, not visual/UX taste. Pair it with a Claude visual
     pass or a screenshot check for UI diffs.
 
-Effort mechanics: a Codex `task` takes `--effort` per call (`none`…`xhigh`), but
+Effort mechanics: a Codex `task` takes `--effort` per call. The GPT-6.2 models accept `low`…`xhigh`
+through the companion; they also list `max` and `ultra`, but the companion rejects those.
 `adversarial-review` takes no `--effort` and inherits `model_reasoning_effort` from `~/.codex/config.toml` (not
 per-call). Claude subagents accept an `effort` frontmatter field, which overrides the session level.
 `architect` and `engineer` pin `xhigh`. `reviewer` deliberately has no `effort` field and inherits

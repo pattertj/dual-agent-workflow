@@ -9,7 +9,7 @@ repository**. Attach `AGENTS.template.md`, the contents of `templates/` (the rol
 You are setting up a **two-vendor coding-agent policy** for this repository: **Claude Code** and
 **Codex** implement and review each other's work. The whole point is that **the reviewer is always the
 opposite vendor of the author**, so review is independent by construction. Claude handles frontend/UI +
-orchestration + review of Codex's work; Codex (`gpt-6-astra` for high-stakes backend, `gpt-6.1-sol`
+orchestration + review of Codex's work; Codex (`gpt-6.2-astra` for high-stakes backend, `gpt-6.2-sol`
 for routine) handles backend implementation + review of Claude's frontend work.
 
 I've attached `AGENTS.template.md` (the canonical shared policy), the role files from `templates/`
@@ -47,7 +47,7 @@ Replace every `{{...}}` token, in `AGENTS.md` **and** `agent-roles/engineer.md`:
 | `{{INTEGRATION_CMD}}` | Integration-tier command (if none exists, say so and remove the reference). |
 | `{{LINT_CMD}}` | Lint command(s) the Engineer must pass before opening a PR. |
 
-Leave the model IDs (`claude-opus-5-5[1m]`, `gpt-6-astra`, `gpt-6.1-sol`) as-is unless you know they've
+Leave the model IDs (`claude-opus-5-5[1m]`, `gpt-6.2-astra`, `gpt-6.2-sol`) as-is unless you know they've
 changed. Keep full Codex IDs — the `codex` plugin doesn't resolve `astra`/`sol` aliases. If this repo
 has **no frontend**, the Codex-reviews-Opus rows can never fire — note that and
 collapse those rows rather than leaving dead routing.
@@ -60,7 +60,7 @@ shells out to Codex:
 ```
 CODEX_ROOT=$(ls -d ~/.claude/plugins/cache/openai-codex/codex/*/ | sort -V | tail -1)
 node "$CODEX_ROOT/scripts/codex-companion.mjs" task \
-  --model {gpt-6-astra|gpt-6.1-sol} --effort {high|low} --write --prompt-file <prompt.txt>
+  --model {gpt-6.2-astra|gpt-6.2-sol} --effort {high|low} --write --prompt-file <prompt.txt>
 ```
 
 Confirm the `codex` plugin is installed (that cache path resolves) and Codex is logged in. If it isn't
