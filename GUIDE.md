@@ -52,8 +52,8 @@ Work is routed by **the riskiest thing the diff touches**:
 
 - **Frontend / UI / visual** → **Claude (Opus 5.5)**. Reviewed by **Codex**.
 - **High-stakes backend** (money-path, auth, migrations, anything expensive to get wrong) →
-  **Codex GPT-6 Astra** (`gpt-6-astra`). Reviewed by **Claude**.
-- **Routine backend / glue** → **Codex GPT-6.1 Sol** (`gpt-6.1-sol`). Reviewed by **Claude**.
+  **Codex GPT-6.2 Astra** (`gpt-6.2-astra`). Reviewed by **Claude**.
+- **Routine backend / glue** → **Codex GPT-6.2 Sol** (`gpt-6.2-sol`). Reviewed by **Claude**.
 - **Pure boilerplate** (renames, config, codegen, zero logic) → **Codex Sol** at low effort. Light
   Claude pass, or skip review entirely.
 - **Docs / comments** → whoever; no review needed.

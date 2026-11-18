@@ -11,6 +11,15 @@ in a way that would change how already-adopted repos behave if they re-copied th
 
 <!-- Add new entries here as you revise the policy. -->
 
+### Changed
+
+- **Breaking:** Codex model routing bumped to the GPT-6.2 generation. The high-stakes / frontend-review
+  tier `gpt-6-astra` → `gpt-6.2-astra`; the routine / boilerplate tier `gpt-6.1-sol` → `gpt-6.2-sol`.
+  Claude routing is unchanged: `claude-opus-5-5[1m]` is still the current Opus. Claude Fable 5.2 was
+  considered and not adopted, as it costs twice as much as Opus 5.5.
+- Effort note corrected: the GPT-6.2 models take `low`…`xhigh` through the companion's `--effort`
+  (not `none`/`minimal`). They also list `max` and `ultra`, which companion 1.0.6 rejects.
+
 ## [0.3.0] - 2026-10-20
 
 ### Added
